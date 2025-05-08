@@ -1,17 +1,17 @@
 const pisoSelect = document.getElementById('pisoActual');
 const destinoSelect = document.getElementById('destino');
 const contenedorPlano = document.getElementById('contenedorPlano');
-
-let flecha = null; 
+let flecha = null;
+let posX = 100;
+let posY = 100;
 
 const destinosPorPiso = {
   1: ["Seleccione", "Direccion", "Prefectura", "Sala de Maestros", "Cubiculos Planta Baja", "Banos", "Area Medica", "Dentista", "Zona puma"],
   2: ["Seleccione", "Aula 1", "Aula 2", "Aula 3", "Aula 32", "Banos", "Competitividad", "Coronel", "Cubículo Planta 2", "Laboratorio Industrial", "Laboratorio Magna", "Laboratorio TI", "Oficina Grande", "Pachuca", "Sala de capacitación", "Secretaría Académica"],
   3: ["Seleccione", "Aula 7", "Aula 8", "Aula 9", "Aula 10", "Aula 11", "Aula 12", "Aula 13", "Aula 14", "Aula 15", "Aula 16", "Aula 17", "Aula 18", "Aula 19", "Aula 20", "Aula 21", "Aula 22", "Aula 23", "Aula 24", "Aula 25", "Banos", "Ciencias basicas", "Cisco 2", "Cisco1", "Laboratorio De Electronica"]
 };
-
 const rutas = {
- 
+
     "1_Seleccione":"",
       "1_Banos": "m 909.76033,565.74701 -1.6304,-123.91001 158.14827,1.6304 1.6304,58.69421",
       "1_Area Medica": "M 914.65151,565.74701 911.39072,246.18962 810.30624,242.92883",
@@ -79,6 +79,7 @@ function actualizarDestinos() {
   });
 }
 
+// Cargar SVG del plano
 function cargarPlano() {
   const piso = pisoSelect.value;
   fetch(`planos/plano_piso${piso}.svg`)
@@ -89,6 +90,7 @@ function cargarPlano() {
     });
 }
 
+// Dibujar ruta en SVG y flecha animada
 function dibujarRuta() {
   const piso = pisoSelect.value;
   const destino = destinoSelect.value;
@@ -100,16 +102,25 @@ function dibujarRuta() {
   const svgDoc = contenedorPlano.querySelector('svg');
   const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
   path.setAttribute("d", pathRuta);
-
-  let strokeWidth = 5;
-  if (piso === "2" || piso === "3") strokeWidth = 0.8;
-
   path.setAttribute("stroke", "red");
-  path.setAttribute("stroke-width", strokeWidth);
+  path.setAttribute("stroke-width", (piso === "2" || piso === "3") ? 0.8 : 5);
   path.setAttribute("fill", "none");
   path.setAttribute("id", "rutaIndicada");
   svgDoc.appendChild(path);
 
+  // Crear flecha y ubicarla al inicio del camino
+  const puntoInicial = path.getPointAtLength(0);
+  flecha = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  flecha.setAttribute("r", "7");
+  flecha.setAttribute("fill", "blue");
+  flecha.setAttribute("id", "flechita");
+  flecha.setAttribute("cx", puntoInicial.x);
+  flecha.setAttribute("cy", puntoInicial.y);
+  svgDoc.appendChild(flecha);
+  posX = puntoInicial.x;
+  posY = puntoInicial.y;
+
+  // Animar trazo
   path.animate([
     { strokeDasharray: "0, 1000" },
     { strokeDasharray: "1000, 0" }
@@ -118,12 +129,6 @@ function dibujarRuta() {
     fill: "forwards"
   });
 
-  flecha = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-  flecha.setAttribute("r", "7");
-  flecha.setAttribute("fill", "blue");
-  flecha.setAttribute("id", "flechita");
-  svgDoc.appendChild(flecha);
-
   let longitud = path.getTotalLength();
   let progreso = 0;
 
@@ -131,10 +136,8 @@ function dibujarRuta() {
     const punto = path.getPointAtLength(progreso);
     flecha.setAttribute("cx", punto.x);
     flecha.setAttribute("cy", punto.y);
-
     path.setAttribute("stroke-dasharray", `${progreso},${longitud}`);
     progreso += 2;
-
     if (progreso <= longitud) {
       requestAnimationFrame(moverFlecha);
     }
@@ -143,6 +146,34 @@ function dibujarRuta() {
   moverFlecha();
 }
 
+function moverConSensor(event) {
+  if (!flecha) return;
+  const velocidad = 0.5;
+  const deltaY = event.beta || 0;
+  const deltaX = event.gamma || 0;
+  posX += deltaX * velocidad;
+  posY += deltaY * velocidad;
+  flecha.setAttribute("cx", posX);
+  flecha.setAttribute("cy", posY);
+}
+
+function solicitarPermisoSensor() {
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(permissionState => {
+        if (permissionState === 'granted') {
+          window.addEventListener("deviceorientation", moverConSensor);
+        } else {
+          alert("Permiso denegado para usar el sensor de orientación.");
+        }
+      })
+      .catch(console.error);
+  } else {
+    window.addEventListener("deviceorientation", moverConSensor);
+  }
+}
+
+document.getElementById("botonSensor").addEventListener("click", solicitarPermisoSensor);
 pisoSelect.addEventListener('change', () => {
   actualizarDestinos();
   cargarPlano();
@@ -151,20 +182,3 @@ destinoSelect.addEventListener('change', cargarPlano);
 
 actualizarDestinos();
 cargarPlano();
-
-let posX = 100; 
-let posY = 100;
-
-window.addEventListener("deviceorientation", (event) => {
-  if (!flecha) return;
-
-  const velocidad = 0.5;
-  const deltaY = event.beta;
-  const deltaX = event.gamma;
-
-  posX += deltaX * velocidad;
-  posY += deltaY * velocidad;
-
-  flecha.setAttribute("cx", posX);
-  flecha.setAttribute("cy", posY);
-});
