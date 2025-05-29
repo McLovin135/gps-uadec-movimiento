@@ -164,7 +164,7 @@ function solicitarPermisoSensor() {
         if (permissionState === 'granted') {
           window.addEventListener("deviceorientation", moverConSensor);
         } else {
-          alert("Permiso denegado para usar el sensor de orientación.");
+          alert("Permiso denegado.");
         }
       })
       .catch(console.error);
